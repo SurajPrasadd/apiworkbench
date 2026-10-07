@@ -1,47 +1,38 @@
-# Build, Run, Package, and Install
+# API Workbench
 
-## Build and Run
+A local API client and development workbench built directly into Visual Studio Code.
 
-> **Important:** Use a fresh, empty folder before starting.
+**Everything stays local: collections, environments, history, and saved responses never leave your machine.**
 
-Run the following commands:
+## How to Use
 
-```bash
-npm install
-npm run compile
-```
+### Open the Workbench (WebView)
 
-### Launch the Extension
+1. Open Command Palette (`Ctrl + Shift + P` / `Cmd + Shift + P`)
+2. Search **API Workbench: Open**
+3. The toolbox opens in a new tab
 
-1. Open the project in **Visual Studio Code**.
-2. Press **F5** to launch the Extension Development Host.
-3. In the new VS Code window, press **Ctrl+Shift+P**.
-4. Search for and run:
+## Key Features
 
-```text
-API Workbench: Open
-```
+- 🚀 Send API requests (GET, POST, PUT, PATCH, DELETE) from VS Code
+- 📁 Collections & folders to organize requests
+- 🌎 Environments with variables (`{{baseUrl}}`, `{{accessToken}}`, etc.)
+- 🔐 Pre-request scripts (JavaScript + CryptoJS / AES support)
+- 🧪 Post-response scripts for validation & token handling
+- 🔑 Token management (access / refresh tokens)
+- 📜 Request history
+- 💾 Saved responses
+- 📤 Import / Export collections & environments - Postman Compatible
+- 🏠 Fully local storage
 
----
+## Privacy
 
-## Package and Install
+Everything runs inside the VS Code WebView or the extension host.  
+**No backend or external API is used.** Your data never leaves your machine.
 
-Create the VS Code extension package:
+## License
 
-```bash
-npx @vscode/vsce package --allow-missing-repository
-```
+MIT
 
-This generates the `.vsix` package, for example:
-
-```text
-api-workbench-1.0.0.vsix
-```
-
-Install the generated extension:
-
-```bash
-code --install-extension api-workbench-1.0.0.vsix
-```
-
-After installation, restart or reload VS Code if required.
+### Screenshot
+<img src="images/screenshot.png" alt="screenshot" width="600">
