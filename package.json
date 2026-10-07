@@ -1,0 +1,50 @@
+{
+  "name": "api-workbench",
+  "displayName": "API Workbench",
+  "description": "CipherDeck API Workbench inside VS Code. Requests run from the extension host, so there is no CORS.",
+  "version": "1.0.0",
+  "publisher": "local",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "apiWorkbench.open",
+        "title": "API Workbench: Open"
+      },
+      {
+        "command": "apiWorkbench.revealDataFile",
+        "title": "API Workbench: Reveal Data File"
+      }
+    ],
+    "configuration": {
+      "title": "API Workbench",
+      "properties": {
+        "apiWorkbench.allowInsecureTls": {
+          "type": "boolean",
+          "default": false,
+          "description": "Accept self-signed HTTPS certificates (for local https:// servers only)."
+        },
+        "apiWorkbench.dataFilePath": {
+          "type": "string",
+          "default": "",
+          "description": "Where collections, environments, history and settings are saved. Leave empty to use the extension's global storage folder. Supports an absolute path, ~/path, or a path relative to the first workspace folder."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.4.0"
+  }
+}
