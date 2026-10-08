@@ -2,7 +2,7 @@
   "name": "api-workbench",
   "displayName": "API Workbench",
   "description": "CipherDeck API Workbench inside VS Code. Requests run from the extension host, so there is no CORS.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "SurajPrasad1993",
   "engines": {
     "vscode": "^1.80.0"

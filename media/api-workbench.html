@@ -1256,6 +1256,11 @@
               <button type="button" class="btn btn--ghost btn--sm" onclick="addHeaderPreset('X-Requested-With','XMLHttpRequest')">X-Requested-With</button>
               <button type="button" class="btn btn--ghost btn--sm" onclick="addHeaderPreset('Cache-Control','no-cache')">Cache-Control</button>
             </div>
+            <div class="header-presets">
+              <button type="button" class="btn btn--ghost btn--sm" onclick="copyAllHeaders()" title="Copy all enabled headers to the clipboard as JSON">Copy all headers</button>
+              <button type="button" class="btn btn--ghost btn--sm" onclick="pasteHeaders(false)" title="Add headers from the clipboard (JSON, cURL -H flags or Key: Value lines)">Paste headers</button>
+              <button type="button" class="btn btn--ghost btn--sm" onclick="pasteHeaders(true)" title="Replace all current headers with the ones on the clipboard">Paste &amp; replace</button>
+            </div>
             <table class="kv-table" id="headers-table">
               <thead><tr><th class="kv-check"></th><th class="kv-key">Key</th><th class="kv-value">Value</th><th class="kv-del"></th></tr></thead>
               <tbody></tbody>
@@ -1585,7 +1590,7 @@
         <button class="btn btn--primary btn--sm" onclick="changeStorage(false)">Change folder&hellip;</button>
         <button class="btn btn--ghost btn--sm" onclick="changeStorage(true)">Use default location</button>
       </div>
-      <p class="field-help" id="storage-help" style="margin-top:12px;">Your current data is copied to the new folder as <code>workbench-data.json</code>. If that folder already contains one, it is loaded instead and nothing is overwritten.</p>
+      <p class="field-help" id="storage-help" style="margin-top:12px;">Your current data is copied to the new folder as <code>workbench-data.json</code>, with saved responses kept next to it in <code>workbench-data.responses.json</code>. If that folder already contains one, it is loaded instead and nothing is overwritten.</p>
       <div class="modal-actions">
         <button class="btn btn--primary" onclick="closeModal('modal-storage')">Close</button>
       </div>
@@ -2376,6 +2381,78 @@
       addKvRow('headers', { key, value, enabled: true });
     }
     showToast('Header ' + key + ' set', 'success');
+  }
+
+  /* ---- Copy / paste the whole header set (to reuse it in a different API) ---- */
+  async function clipboardWriteText(text) {
+    if (IS_VSCODE) { await hostCall('clipboardWrite', { data: text }); return; }
+    await navigator.clipboard.writeText(text);
+  }
+  async function clipboardReadText() {
+    if (IS_VSCODE) { const r = await hostCall('clipboardRead', {}); return r.data || ''; }
+    return await navigator.clipboard.readText();
+  }
+
+  async function copyAllHeaders() {
+    const rows = getKvRows('headers').filter(h => h.enabled);
+    if (!rows.length) { showToast('No enabled headers to copy', 'danger'); return; }
+    const obj = {};
+    rows.forEach(h => { obj[h.key] = h.value; });
+    try {
+      await clipboardWriteText(JSON.stringify(obj, null, 2));
+      showToast('Copied ' + rows.length + ' header' + (rows.length === 1 ? '' : 's'), 'success');
+    } catch (e) {
+      showToast('Could not copy headers: ' + (e.message || e), 'danger');
+    }
+  }
+
+  // Accepts: a JSON object, a JSON array of {key,value}, cURL "-H 'K: V'" flags, or "Key: Value" lines.
+  function parseHeaderText(text) {
+    text = String(text || '').trim();
+    if (!text) return [];
+    try {
+      const j = JSON.parse(text);
+      if (Array.isArray(j)) {
+        return j.filter(x => x && (x.key || x.name))
+                .map(x => ({ key: String(x.key || x.name), value: String(x.value == null ? '' : x.value) }));
+      }
+      if (j && typeof j === 'object') {
+        return Object.keys(j).map(k => ({ key: k, value: String(j[k]) }));
+      }
+    } catch (e) { /* not JSON, fall through */ }
+    const out = [];
+    const flag = /(?:-H|--header)\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)")/g;
+    let m, sawFlag = false;
+    while ((m = flag.exec(text)) !== null) {
+      sawFlag = true;
+      const line = m[1] != null ? m[1] : m[2].replace(/\\(["\\])/g, '$1');
+      const i = line.indexOf(':');
+      if (i > 0) out.push({ key: line.slice(0, i).trim(), value: line.slice(i + 1).trim() });
+    }
+    if (sawFlag) return out;
+    text.split(/\r?\n/).forEach(l => {
+      const i = l.indexOf(':');
+      if (i > 0) out.push({ key: l.slice(0, i).trim(), value: l.slice(i + 1).trim() });
+    });
+    return out;
+  }
+
+  async function pasteHeaders(replace) {
+    let text;
+    try { text = await clipboardReadText(); }
+    catch (e) { showToast('Could not read the clipboard: ' + (e.message || e), 'danger'); return; }
+    const parsed = parseHeaderText(text);
+    if (!parsed.length) { showToast('No headers found on the clipboard', 'danger'); return; }
+    const rows = replace ? [] : getKvRows('headers');
+    let added = 0, updated = 0;
+    parsed.forEach(h => {
+      const ex = rows.find(r => r.key.toLowerCase() === h.key.toLowerCase());
+      if (ex) { ex.value = h.value; ex.enabled = true; updated++; }
+      else { rows.push({ key: h.key, value: h.value, enabled: true }); added++; }
+    });
+    setKvRows('headers', rows);
+    showToast((replace ? 'Replaced with ' + added : 'Pasted ' + added + ' new') +
+      (updated ? ', updated ' + updated : '') + ' header' + ((added + updated) === 1 ? '' : 's'), 'success');
   }
 
   function duplicateRequest(colId, reqId) {

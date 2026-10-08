@@ -56,7 +56,12 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
-// ---- State file (replaces webview localStorage, which has a small quota) ----
+// ---- State files ----
+// Main state (collections, envs, settings) and saved responses live in separate
+// files, so large responses don't slow down the frequent small saves.
+
+// Must match the property the webview uses for saved responses in its state object.
+const SAVED_RESPONSES_KEY = 'savedResponses';
 
 function dataFilePath(context: vscode.ExtensionContext): string {
   let configured = vscode.workspace.getConfiguration('apiWorkbench').get<string>('dataFilePath', '').trim();
@@ -67,6 +72,11 @@ function dataFilePath(context: vscode.ExtensionContext): string {
     if (folder) { return path.join(folder, configured); }
   }
   return path.join(context.globalStorageUri.fsPath, 'workbench-data.json');
+}
+
+function responsesFilePath(mainFile: string): string {
+  const parsed = path.parse(mainFile);
+  return path.join(parsed.dir, `${parsed.name}.responses${parsed.ext || '.json'}`);
 }
 
 async function readState(file: string): Promise<{ data: unknown; warning?: string }> {
@@ -88,16 +98,56 @@ async function readState(file: string): Promise<{ data: unknown; warning?: strin
   }
 }
 
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+const lastWritten = new Map<string, string>();   // file -> last serialized content
+
+async function loadMergedState(mainFile: string): Promise<{ data: unknown; warning?: string }> {
+  const respFile = responsesFilePath(mainFile);
+  // The files may have been edited outside the extension, so forget the write cache.
+  lastWritten.delete(mainFile);
+  lastWritten.delete(respFile);
+
+  const main = await readState(mainFile);
+  const resp = await readState(respFile);
+  const warnings = [main.warning, resp.warning].filter(Boolean).join(' ');
+
+  let data = main.data;
+  // If the responses file exists, it wins. Otherwise keep whatever the main file
+  // has (old single-file data), which migrates on the next save.
+  if (isPlainObject(data) && resp.data !== null) {
+    data = { ...data, [SAVED_RESPONSES_KEY]: resp.data };
+  }
+  return { data, warning: warnings || undefined };
+}
+
 let writeQueue: Promise<void> = Promise.resolve();
+
 function writeState(file: string, data: unknown): Promise<void> {
   const job = writeQueue.then(async () => {
+    const json = JSON.stringify(data, null, 2);
+    if (lastWritten.get(file) === json) { return; }   // unchanged: skip disk write
     await fs.promises.mkdir(path.dirname(file), { recursive: true });
     const tmp = `${file}.tmp`;
-    await fs.promises.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8');
+    await fs.promises.writeFile(tmp, json, 'utf8');
     await fs.promises.rename(tmp, file);   // atomic replace: a crash never leaves a half-written file
+    lastWritten.set(file, json);
   });
   writeQueue = job.catch(() => undefined);
   return job;
+}
+
+async function saveSplitState(mainFile: string, data: unknown): Promise<void> {
+  if (isPlainObject(data) && SAVED_RESPONSES_KEY in data) {
+    const { [SAVED_RESPONSES_KEY]: saved, ...rest } = data;
+    // Responses first: if we crash between the two, nothing is lost.
+    await writeState(responsesFilePath(mainFile), saved);
+    await writeState(mainFile, rest);
+  } else {
+    await writeState(mainFile, data);
+  }
 }
 
 function openPanel(context: vscode.ExtensionContext): void {
@@ -146,12 +196,28 @@ function openPanel(context: vscode.ExtensionContext): void {
       try {
         const file = dataFilePath(context);
         if (msg.type === 'stateLoad') {
-          const r = await readState(file);
+          const r = await loadMergedState(file);
           void current.webview.postMessage({ type: 'rpcResult', id: msg.id, ok: true, data: r.data, warning: r.warning, file });
         } else {
-          await writeState(file, msg.data);
+          await saveSplitState(file, msg.data);
           void current.webview.postMessage({ type: 'rpcResult', id: msg.id, ok: true, file });
         }
+      } catch (e) {
+        void current.webview.postMessage({ type: 'rpcResult', id: msg.id, ok: false, error: describe(e) });
+      }
+    } else if (msg.type === 'clipboardWrite') {
+      // Used by "Copy all headers": the webview can't rely on navigator.clipboard.
+      try {
+        await vscode.env.clipboard.writeText(String(msg.data ?? ''));
+        void current.webview.postMessage({ type: 'rpcResult', id: msg.id, ok: true });
+      } catch (e) {
+        void current.webview.postMessage({ type: 'rpcResult', id: msg.id, ok: false, error: describe(e) });
+      }
+    } else if (msg.type === 'clipboardRead') {
+      // Used by "Paste headers" in another request / API.
+      try {
+        const text = await vscode.env.clipboard.readText();
+        void current.webview.postMessage({ type: 'rpcResult', id: msg.id, ok: true, data: text });
       } catch (e) {
         void current.webview.postMessage({ type: 'rpcResult', id: msg.id, ok: false, error: describe(e) });
       }
