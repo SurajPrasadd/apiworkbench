@@ -13,6 +13,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/selection/active-line.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/comment/comment.min.js"></script>
   <style>
     .CodeMirror {
       border: 1px solid var(--border);
@@ -1131,6 +1132,19 @@
     #btn-new-tab { align-self: center; margin: 0 6px; flex-shrink: 0; }
     .btn:disabled { opacity: .65; cursor: progress; }
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+    .console-toggle { display:inline-flex; align-items:center; gap:6px; padding:3px 6px; border-radius:6px;
+      color:var(--t-muted); font:500 10px "JetBrains Mono",monospace; letter-spacing:.08em; text-transform:uppercase; }
+    .console-toggle:hover { background:var(--bg-hover); color:var(--t-base); }
+    .console-toggle .chev { display:inline-block; transition:transform .12s; }
+    .console-toggle[aria-expanded=true] .chev { transform:rotate(90deg); }
+    .console-box[hidden] { display:none; }
+    .console-box { margin-top:6px; }
+    /* Script editors fill the panel; an open console takes its space from the editor */
+    .script-editor-wrap { flex:1 1 0; min-height:120px; position:relative; }
+    .script-editor-wrap .CodeMirror { position:absolute; top:0; left:0; right:0; bottom:0; height:100% !important; min-height:0 !important; }
+    .script-editor-wrap .CodeMirror-scroll { min-height:0; max-height:none; }
+    #panel-prerequest > div:last-child, #panel-tests > div:last-child { flex:none; }
+    .sidebar-folder .folder-actions .icon-btn { width:24px; }
   </style>
 </head>
 <body>
@@ -1169,12 +1183,9 @@
           </button>
         </div>
       </div>
-      <div class="sidebar-list" id="environments-list" style="flex:0 0 auto; max-height:160px;"></div>
+      <div class="sidebar-list" id="environments-list" style="display:none;flex:0 0 auto; max-height:160px;"></div>
 
       <div class="sidebar-footer">
-        <button class="btn btn--ghost btn--sm" style="width:100%; justify-content:center;" onclick="loadSampleApi()" title="Adds a sample collection with AES-encrypted request and response scripts">
-          Load sample API
-        </button>
         <button class="btn btn--ghost btn--sm" style="width:100%; justify-content:center;" onclick="openImportModal()">
           Import
         </button>
@@ -1226,6 +1237,7 @@
         <input class="input url-input" id="req-url" type="text" placeholder="https://api.example.com/{{path}} or {{baseUrl}}/users" spellcheck="false"/>
         <button class="btn btn--primary send-btn" id="btn-send" onclick="sendRequest()">Send</button>
         <button class="btn btn--ghost" title="Save request" onclick="saveCurrentRequest()">Save</button>
+        <button class="btn btn--ghost" title="Copy as cURL" onclick="copyCurl()">cURL</button>
       </div>
       <div class="req-tabs-wrap">
         <div class="tabs" id="req-tabs">
@@ -1324,19 +1336,19 @@
 
           <div class="req-panel" id="panel-prerequest">
             <p class="field-help" style="margin-bottom:8px;">Runs before send. Write your own encrypt logic; set <code>pm.request.body</code>. <code>CryptoJS</code> is available.</p>
-            <textarea class="textarea mono" id="prerequest-script" placeholder="// pm.environment.set('token', 'abc');&#10;console.log('pre-request');" style="min-height:200px; font-family:JetBrains Mono,monospace;"></textarea>
+            <div class="script-editor-wrap"><textarea class="textarea mono" id="prerequest-script" placeholder="// pm.environment.set('token', 'abc');&#10;console.log('pre-request');" style="min-height:200px; font-family:JetBrains Mono,monospace;"></textarea></div>
             <div style="margin-top:10px;">
-              <span class="eyebrow">Console</span>
-              <div class="console-box" id="prerequest-console"><div class="sc-empty">Script output appears here…</div></div>
+              <button type="button" class="console-toggle" data-console="prerequest-console" aria-expanded="false"><span class="chev">▸</span> Console <span class="badge" id="prerequest-console-count">0</span></button>
+              <div class="console-box" id="prerequest-console" hidden><div class="sc-empty">Script output appears here…</div></div>
             </div>
           </div>
 
           <div class="req-panel" id="panel-tests">
             <p class="field-help" style="margin-bottom:8px;">Runs after response. Write your own decrypt logic with <code>CryptoJS</code>; use <code>pm.response.text()</code> / <code>pm.response.json()</code> and <code>console.log</code>.</p>
-            <textarea class="textarea mono" id="tests-script" placeholder="// pm.test(&quot;Status is 200&quot;, function () {&#10;//   pm.expect(pm.response.code).to.eql(200);&#10;// });&#10;// console.log(pm.response.json());" style="min-height:200px; font-family:JetBrains Mono,monospace;"></textarea>
+            <div class="script-editor-wrap"><textarea class="textarea mono" id="tests-script" placeholder="// pm.test(&quot;Status is 200&quot;, function () {&#10;//   pm.expect(pm.response.code).to.eql(200);&#10;// });&#10;// console.log(pm.response.json());" style="min-height:200px; font-family:JetBrains Mono,monospace;"></textarea></div>
             <div style="margin-top:10px;">
-              <span class="eyebrow">Console &amp; test results</span>
-              <div class="console-box" id="tests-console"><div class="sc-empty">Post-response output appears here…</div></div>
+              <button type="button" class="console-toggle" data-console="tests-console" aria-expanded="false"><span class="chev">▸</span> Console &amp; test results <span class="badge" id="tests-console-count">0</span></button>
+              <div class="console-box" id="tests-console" hidden><div class="sc-empty">Post-response output appears here…</div></div>
             </div>
           </div>
         </div>
@@ -1461,6 +1473,27 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="modal-curl">
+    <div class="modal modal-wide">
+      <div class="modal-head">
+        <h2 class="modal-title">Import cURL</h2>
+        <button class="icon-btn" onclick="closeModal('modal-curl')"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="field" style="margin-bottom:12px;">
+        <label class="field-label">cURL command</label>
+        <textarea class="textarea mono" id="curl-input" rows="8" spellcheck="false" placeholder="curl -X POST 'https://api.example.com/login' -H 'Content-Type: application/json' -d '{&quot;a&quot;:1}'"></textarea>
+      </div>
+      <div class="field">
+        <label class="field-label">Add to collection</label>
+        <select class="select" id="curl-collection"></select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn--ghost" onclick="closeModal('modal-curl')">Cancel</button>
+        <button class="btn btn--primary" onclick="confirmCurlImport()">Import</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modal-import">
     <div class="modal">
       <div class="modal-head">
@@ -1469,6 +1502,13 @@
       </div>
       <p class="field-help" style="margin-bottom:12px;">Import a Postman Collection v2.1 or Environment JSON file (or CipherDeck export).</p>
       <input type="file" id="import-file" accept=".json,application/json" class="input" style="padding:8px;"/>
+      <div style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border-soft);">
+        <span class="eyebrow">Other ways to add</span>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+          <button type="button" class="btn btn--ghost btn--sm" onclick="closeModal('modal-import'); openCurlImport()">Import cURL</button>
+          <button type="button" class="btn btn--ghost btn--sm" onclick="closeModal('modal-import'); loadSampleApi()" title="Adds a sample collection with AES-encrypted request and response scripts">Load sample API</button>
+        </div>
+      </div>
       <div class="modal-actions">
         <button class="btn btn--ghost" onclick="closeModal('modal-import')">Cancel</button>
         <button class="btn btn--primary" onclick="doImport()">Import</button>
@@ -1955,7 +1995,12 @@
         }
       };
 
-      actions.append(addBtn, renColBtn, delBtn);
+      const curlBtn = document.createElement('button');
+      curlBtn.className = 'icon-btn';
+      curlBtn.title = 'Import cURL into this collection';
+      curlBtn.innerHTML = '<span style="font:700 9px JetBrains Mono,monospace">cURL</span>';
+      curlBtn.onclick = (e) => { e.stopPropagation(); openCurlImport('', col.id); };
+      actions.append(addBtn, curlBtn, renColBtn, delBtn);
       folder.append(chevron, nameSpan, actions);
       folder.onclick = (e) => {
         if (e.target.closest('button')) return;
@@ -2115,7 +2160,7 @@
         <option value="file" ${data.type === 'file' ? 'selected' : ''}>File</option>
       </select></td>
       <td class="kv-value"><input class="input" placeholder="Value" value="${esc(data.value || '')}" data-type="text"/>
-        <input type="file" class="input form-data-file" style="display:none; padding:4px;" data-type="file"/></td>
+        <input type="file" multiple class="input form-data-file" style="display:none; padding:4px;" data-type="file"/></td>
       <td class="kv-del"><button class="icon-btn" type="button"><svg viewBox="0 0 24 24" width="14" height="14"><path d="M18 6 6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2"/></svg></button></td>`;
     const typeSel = tr.querySelector('select');
     const textIn = tr.querySelector('[data-type=text]');
@@ -2137,8 +2182,8 @@
       const type = tr.querySelector('select').value;
       if (!key) return;
       if (type === 'file') {
-        const file = tr.querySelector('[data-type=file]').files[0];
-        rows.push({ key, type: 'file', file, enabled });
+        const files = Array.from(tr.querySelector('[data-type=file]').files || []);
+        rows.push({ key, type: 'file', files, file: files[0], enabled });
       } else {
         rows.push({ key, type: 'text', value: tr.querySelector('[data-type=text]').value, enabled });
       }
@@ -2337,6 +2382,7 @@
     if (box) box.innerHTML = '';
     if (!code || !code.trim()) {
       if (box) box.innerHTML = '<div class="sc-empty">No script.</div>';
+      if (box && box.id) updateConsoleCount(box.id);
       return { logs: [], tests: [], pm: null };
     }
     const api = createPmApi(ctx);
@@ -2362,6 +2408,7 @@
         });
       }
     }
+    if (box && box.id) updateConsoleCount(box.id);
     return { logs: api.logs, tests: api.tests, pm: api.pm, requestBody: api.requestBody() };
   }
 
@@ -2513,10 +2560,11 @@
       indentUnit: 2,
       tabSize: 2,
       theme: cmTheme(),
-      viewportMargin: Infinity
+      viewportMargin: Infinity,
+      extraKeys: { 'Ctrl-/': 'toggleComment', 'Cmd-/': 'toggleComment' }
     };
     const map = [
-      { id: 'raw-body', mode: { name: 'javascript', json: true } },
+      { id: 'raw-body', mode: 'javascript' },
       { id: 'prerequest-script', mode: 'javascript' },
       { id: 'tests-script', mode: 'javascript' }
     ];
@@ -2524,23 +2572,12 @@
       const ta = document.getElementById(id);
       if (!ta || cmEditors[id]) return;
       cmEditors[id] = CodeMirror.fromTextArea(ta, { ...common, mode });
-      cmEditors[id].setSize('100%', id === 'raw-body' ? 220 : 200);
+      if (id === 'raw-body') cmEditors[id].setSize('100%', 220);
       cmEditors[id].on('change', (cm, ch) => { if (ch.origin !== 'setValue') markDirty(); });
     });
-    // Update JSON mode when raw language changes
     const rawLang = document.getElementById('raw-lang');
-    if (rawLang) {
-      rawLang.addEventListener('change', () => {
-        if (!cmEditors['raw-body']) return;
-        const v = rawLang.value;
-        let mode = 'javascript';
-        if (v === 'json') mode = { name: 'javascript', json: true };
-        else if (v === 'xml' || v === 'html') mode = 'xml';
-        else if (v === 'javascript') mode = 'javascript';
-        else mode = null;
-        cmEditors['raw-body'].setOption('mode', mode);
-      });
-    }
+    if (rawLang) rawLang.addEventListener('change', updateRawMode);
+    updateRawMode();
   }
 
   function refreshCmEditors() {
@@ -2702,7 +2739,7 @@
 
     // Initial body from UI (may be replaced by pre-request)
     let bodyTextForScript = '';
-    if (bodyType === 'raw') bodyTextForScript = getEditorValue('raw-body');
+    if (bodyType === 'raw') bodyTextForScript = getRawBodyForSend();
     else if (bodyType === 'graphql') {
       bodyTextForScript = JSON.stringify({
         query: document.getElementById('gql-query').value,
@@ -2754,7 +2791,7 @@
 
     try {
       if (bt === 'raw') {
-        body = preBodyOverride != null ? interpolate(preBodyOverride, getActiveEnvVars()) : interpolate(getEditorValue('raw-body'), vars);
+        body = preBodyOverride != null ? interpolate(preBodyOverride, getActiveEnvVars()) : interpolate(getRawBodyForSend(), vars);
         const lang = document.getElementById('raw-lang').value;
         if (lang === 'json' && !headers['Content-Type'] && !headers['content-type']) {
           headers['Content-Type'] = 'application/json';
@@ -2774,13 +2811,14 @@
           for (const r of rows) {
             const name = interpolate(r.key, vars);
             if (r.type === 'file') {
-              if (!r.file) continue;
-              multipartParts.push({
-                name: name,
-                filename: r.file.name,
-                contentType: r.file.type || 'application/octet-stream',
-                dataBase64: await fileToBase64(r.file)
-              });
+              for (const f of (r.files || [])) {
+                multipartParts.push({
+                  name: name,
+                  filename: f.name,
+                  contentType: f.type || 'application/octet-stream',
+                  dataBase64: await fileToBase64(f)
+                });
+              }
             } else {
               multipartParts.push({ name: name, value: interpolate(r.value || '', vars) });
             }
@@ -2788,7 +2826,7 @@
         } else {
           const fd = new FormData();
           rows.forEach(r => {
-            if (r.type === 'file' && r.file) fd.append(interpolate(r.key, vars), r.file);
+            if (r.type === 'file') (r.files || []).forEach(f => fd.append(interpolate(r.key, vars), f));
             else fd.append(interpolate(r.key, vars), interpolate(r.value || '', vars));
           });
           body = fd;
@@ -3443,6 +3481,7 @@
     const body = req.body || {};
     setEditorValue('raw-body', body.raw || '');
     document.getElementById('raw-lang').value = body.rawLang || 'json';
+    updateRawMode();
     document.getElementById('gql-query').value = body.graphqlQuery || '';
     document.getElementById('gql-vars').value = body.graphqlVars || '';
     setKvRows('urlencoded', body.urlencoded || []);
@@ -3478,6 +3517,7 @@
     const c = (t && t.consoles) || {};
     document.getElementById('prerequest-console').innerHTML = c.pre || CONSOLE_DEFAULTS.pre;
     document.getElementById('tests-console').innerHTML = c.tests || CONSOLE_DEFAULTS.tests;
+    updateConsoleCount('prerequest-console'); updateConsoleCount('tests-console');
   }
   function resetResponse() {
     lastResponse = null;
@@ -4473,6 +4513,270 @@ try {
     openRequestTab(col.id, col.requests[0].id);
     showToast('Sample API loaded - press Send on the demo request', 'success');
   }
+
+  /* =========================================================================
+     Console toggles (collapsed until clicked)
+     ========================================================================= */
+  document.querySelectorAll('.console-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const box = document.getElementById(btn.dataset.console);
+      const open = box.hasAttribute('hidden');
+      box.toggleAttribute('hidden', !open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  });
+  (function () {
+    if (typeof ResizeObserver === 'undefined') return;
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => { if (typeof refreshCmEditors === 'function') refreshCmEditors(); });
+    });
+    document.querySelectorAll('.script-editor-wrap').forEach(el => ro.observe(el));
+  })();
+  function updateConsoleCount(id) {
+    const box = document.getElementById(id), badge = document.getElementById(id + '-count');
+    if (!box || !badge) return;
+    badge.textContent = box.querySelectorAll('div:not(.sc-empty)').length;
+    badge.className = 'badge' + (box.querySelector('.sc-error') ? ' danger' : '');
+  }
+
+  /* =========================================================================
+     Raw body: line and block comments
+     ========================================================================= */
+  function updateRawMode() {
+    const ed = cmEditors['raw-body'];
+    if (!ed) return;
+    const v = document.getElementById('raw-lang').value;
+    ed.setOption('mode', (v === 'json' || v === 'javascript') ? 'javascript'
+                       : (v === 'xml' || v === 'html') ? 'xml' : null);
+  }
+  function stripJsonComments(s) {
+    let out = '', i = 0, inStr = false;
+    while (i < s.length) {
+      const c = s[i], n = s[i + 1];
+      if (inStr) {
+        out += c;
+        if (c === '\\') { out += s[i + 1] || ''; i += 2; continue; }
+        if (c === '"') inStr = false;
+        i++; continue;
+      }
+      if (c === '"') { inStr = true; out += c; i++; continue; }
+      if (c === '/' && n === '/') { while (i < s.length && s[i] !== '\n') i++; continue; }
+      if (c === '/' && n === '*') { const e = s.indexOf('*/', i + 2); i = e < 0 ? s.length : e + 2; continue; }
+      out += c; i++;
+    }
+    return out;
+  }
+  function getRawBodyForSend() {
+    const raw = getEditorValue('raw-body');
+    return document.getElementById('raw-lang').value === 'json' ? stripJsonComments(raw) : raw;
+  }
+
+  /* =========================================================================
+     cURL export / import
+     ========================================================================= */
+  function shq(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
+
+  function buildCurl() {
+    const vars = getActiveEnvVars();
+    const method = document.getElementById('req-method').value;
+    let url = interpolate(document.getElementById('req-url').value.trim(), vars);
+    const params = getKvRows('params').filter(p => p.enabled);
+    if (params.length) {
+      try {
+        const u = new URL(url);
+        params.forEach(p => u.searchParams.set(interpolate(p.key, vars), interpolate(p.value, vars)));
+        url = u.toString();
+      } catch (e) {}
+    }
+    const L = ['curl'];
+    if (method === 'HEAD') L.push('-I'); else if (method !== 'GET') L.push('-X ' + method);
+    L.push(shq(url));
+
+    let headers = getKvRows('headers').filter(h => h.enabled);
+    if (bodyType === 'form-data') headers = headers.filter(h => h.key.toLowerCase() !== 'content-type');
+    const hasCT = headers.some(h => h.key.toLowerCase() === 'content-type');
+    headers.forEach(h => L.push('-H ' + shq(interpolate(h.key, vars) + ': ' + interpolate(h.value, vars))));
+
+    if (bodyType === 'raw') {
+      const lang = document.getElementById('raw-lang').value;
+      if (!hasCT && lang === 'json') L.push('-H ' + shq('Content-Type: application/json'));
+      L.push('--data-raw ' + shq(interpolate(getRawBodyForSend(), vars)));
+    } else if (bodyType === 'urlencoded') {
+      getKvRows('urlencoded').filter(r => r.enabled)
+        .forEach(r => L.push('--data-urlencode ' + shq(interpolate(r.key, vars) + '=' + interpolate(r.value, vars))));
+    } else if (bodyType === 'form-data') {
+      getFormDataRows().filter(r => r.enabled).forEach(r => {
+        const k = interpolate(r.key, vars);
+        if (r.type === 'file') (r.files || []).forEach(f => L.push('-F ' + shq(k + '=@' + f.name)));
+        else L.push('-F ' + shq(k + '=' + interpolate(r.value || '', vars)));
+      });
+    } else if (bodyType === 'graphql') {
+      let v = {}; try { v = JSON.parse(interpolate(document.getElementById('gql-vars').value || '{}', vars)); } catch (e) {}
+      if (!hasCT) L.push('-H ' + shq('Content-Type: application/json'));
+      L.push('--data-raw ' + shq(JSON.stringify({ query: interpolate(document.getElementById('gql-query').value, vars), variables: v })));
+    } else if (bodyType === 'binary') {
+      const f = document.getElementById('binary-file').files[0];
+      if (f) L.push('--data-binary ' + shq('@' + f.name));
+    }
+    return L.join(' \\\n  ');
+  }
+
+  async function copyCurl() {
+    try {
+      await clipboardWriteText(buildCurl());
+      showToast('cURL copied (variables resolved)', 'success');
+    } catch (e) { showToast('Could not copy: ' + (e.message || e), 'danger'); }
+  }
+
+  function tokenizeCurl(s) {
+    s = s.replace(/\\\r?\n/g, ' ').replace(/\^\r?\n/g, ' ');
+    const out = []; let cur = '', has = false, i = 0;
+    const esc = { n: '\n', r: '\r', t: '\t', '\\': '\\', "'": "'", '"': '"' };
+    while (i < s.length) {
+      const c = s[i];
+      if (/\s/.test(c)) { if (has) { out.push(cur); cur = ''; has = false; } i++; continue; }
+      if (c === "'") { const j = s.indexOf("'", i + 1); const e = j < 0 ? s.length : j; cur += s.slice(i + 1, e); has = true; i = e + 1; continue; }
+      if (c === '$' && s[i + 1] === "'") {
+        i += 2;
+        while (i < s.length && s[i] !== "'") {
+          if (s[i] === '\\' && i + 1 < s.length) { const n = s[i + 1]; cur += esc[n] !== undefined ? esc[n] : '\\' + n; i += 2; }
+          else cur += s[i++];
+        }
+        i++; has = true; continue;
+      }
+      if (c === '"') {
+        i++;
+        while (i < s.length && s[i] !== '"') {
+          if (s[i] === '\\' && i + 1 < s.length && /["\\$`]/.test(s[i + 1])) { cur += s[i + 1]; i += 2; }
+          else cur += s[i++];
+        }
+        i++; has = true; continue;
+      }
+      if (c === '\\' && i + 1 < s.length) { cur += s[i + 1]; i += 2; has = true; continue; }
+      cur += c; has = true; i++;
+    }
+    if (has) out.push(cur);
+    return out;
+  }
+
+  function parseCurl(text) {
+    const t = tokenizeCurl(String(text).trim());
+    if (!t.length || t[0].toLowerCase() !== 'curl') throw new Error('Not a cURL command');
+    let method = null, url = '', head = false, getMode = false;
+    const headers = [], data = [], urlenc = [], forms = [];
+    const addH = (key, value) => headers.push({ key, value, enabled: true });
+    for (let i = 1; i < t.length; i++) {
+      let a = t[i], val = null;
+      if (a.startsWith('--') && a.includes('=')) { const k = a.indexOf('='); val = a.slice(k + 1); a = a.slice(0, k); }
+      const arg = () => (val !== null ? val : (t[++i] || ''));
+      if (/^-X.+/.test(a)) { method = a.slice(2).toUpperCase(); continue; }
+      switch (a) {
+        case '-X': case '--request': method = arg().toUpperCase(); break;
+        case '-H': case '--header': { const h = arg(); const k = h.indexOf(':'); if (k > 0) addH(h.slice(0, k).trim(), h.slice(k + 1).trim()); break; }
+        case '-d': case '--data': case '--data-raw': case '--data-binary': case '--data-ascii': data.push(arg()); break;
+        case '--data-urlencode': urlenc.push(arg()); break;
+        case '-F': case '--form': case '--form-string': forms.push(arg()); break;
+        case '-u': case '--user': addH('Authorization', 'Basic ' + btoa(arg())); break;
+        case '-b': case '--cookie': addH('Cookie', arg()); break;
+        case '-A': case '--user-agent': addH('User-Agent', arg()); break;
+        case '-e': case '--referer': addH('Referer', arg()); break;
+        case '--url': url = arg(); break;
+        case '-I': case '--head': head = true; break;
+        case '-G': case '--get': getMode = true; break;
+        case '-o': case '--output': case '-m': case '--max-time': case '--connect-timeout':
+        case '-x': case '--proxy': case '--cacert': case '--cert': case '--key': case '-w': arg(); break;
+        default:
+          if (!a.startsWith('-') && !url) url = a;
+      }
+    }
+    if (!url) throw new Error('No URL found in the cURL command');
+
+    const ctH = headers.find(h => h.key.toLowerCase() === 'content-type');
+    const ct = ctH ? ctH.value.toLowerCase() : '';
+    let bodyType = 'none', body = {};
+    const splitKV = (s) => { const k = s.indexOf('='); return k < 0 ? { key: s, value: '' } : { key: s.slice(0, k), value: s.slice(k + 1) }; };
+
+    if (forms.length) {
+      bodyType = 'form-data';
+      body.formdata = forms.map(f => {
+        const kv = splitKV(f);
+        return kv.value.startsWith('@')
+          ? { key: kv.key, type: 'file', value: '', enabled: true }
+          : { key: kv.key, type: 'text', value: kv.value, enabled: true };
+      });
+      for (let i = headers.length - 1; i >= 0; i--) if (headers[i].key.toLowerCase() === 'content-type') headers.splice(i, 1);
+    } else if (getMode && (data.length || urlenc.length)) {
+      const qs = data.concat(urlenc.map(u => { const kv = splitKV(u); return kv.key + '=' + encodeURIComponent(kv.value); })).join('&');
+      url += (url.includes('?') ? '&' : '?') + qs;
+    } else if (urlenc.length || (data.length && ct.includes('x-www-form-urlencoded'))) {
+      bodyType = 'urlencoded';
+      const rows = [];
+      data.join('&').split('&').filter(Boolean).forEach(p => {
+        const kv = splitKV(p);
+        let k = kv.key, v = kv.value;
+        try { k = decodeURIComponent(k.replace(/\+/g, ' ')); v = decodeURIComponent(v.replace(/\+/g, ' ')); } catch (e) {}
+        rows.push({ key: k, value: v, enabled: true });
+      });
+      urlenc.forEach(u => { const kv = splitKV(u); rows.push({ key: kv.key, value: kv.value, enabled: true }); });
+      body.urlencoded = rows;
+    } else if (data.length) {
+      bodyType = 'raw';
+      let raw = data.join('&');
+      let lang = 'text';
+      if (ct.includes('json') || /^\s*[\[{]/.test(raw)) {
+        lang = 'json';
+        try { raw = JSON.stringify(JSON.parse(raw), null, 2); } catch (e) {}
+      } else if (ct.includes('xml') || /^\s*</.test(raw)) lang = 'xml';
+      body.raw = raw; body.rawLang = lang;
+    }
+
+    let name = (head ? 'HEAD' : method) || '';
+    try { const u = new URL(url); name = (name || 'REQ') + ' ' + (u.pathname === '/' ? u.host : u.pathname); }
+    catch (e) { name = (name || 'REQ') + ' ' + url.slice(0, 40); }
+
+    return {
+      id: uid(), name: name.trim(),
+      method: head ? 'HEAD' : (method || ((data.length || urlenc.length || forms.length) && !getMode ? 'POST' : 'GET')),
+      url, params: [], headers, bodyType, body, preRequest: '', tests: ''
+    };
+  }
+
+  function openCurlImport(text, colId) {
+    const sel = document.getElementById('curl-collection');
+    sel.innerHTML = '';
+    state.collections.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.name;
+      if (c.id === (colId || state.activeCollectionId)) o.selected = true;
+      sel.appendChild(o);
+    });
+    document.getElementById('curl-input').value = text || '';
+    openModal('modal-curl');
+    setTimeout(() => document.getElementById('curl-input').focus(), 50);
+  }
+
+  function confirmCurlImport() {
+    const col = state.collections.find(c => c.id === document.getElementById('curl-collection').value);
+    if (!col) { showToast('Choose a collection', 'danger'); return; }
+    try {
+      const req = parseCurl(document.getElementById('curl-input').value);
+      col.requests.push(req);
+      if (state.collapsedCollections) state.collapsedCollections[col.id] = false;
+      saveState();
+      renderCollections();
+      closeModal('modal-curl');
+      openRequestTab(col.id, req.id);
+      showToast('Imported: ' + req.name, 'success');
+    } catch (e) { showToast('cURL import failed: ' + e.message, 'danger'); }
+  }
+
+  // Pasting a cURL command into the URL box opens the importer
+  document.getElementById('req-url').addEventListener('paste', (e) => {
+    const txt = (e.clipboardData || window.clipboardData).getData('text');
+    if (/^\s*curl\s/i.test(txt)) { e.preventDefault(); openCurlImport(txt); }
+  });
 
   function openModal(id) { document.getElementById(id).classList.add('is-open'); }
   function closeModal(id) { document.getElementById(id).classList.remove('is-open'); }
