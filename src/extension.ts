@@ -43,6 +43,16 @@ interface WebviewMessage {
 let panel: vscode.WebviewPanel | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
+  const launcher = vscode.window.createTreeView('apiWorkbench.launcher', {
+    treeDataProvider: {
+      getTreeItem: (e: never) => e,
+      getChildren: () => []          // empty tree shows the welcome text and button
+    }
+  });
+  launcher.onDidChangeVisibility(e => {
+    if (e.visible) { void vscode.commands.executeCommand('apiWorkbench.open'); }
+  });
+  context.subscriptions.push(launcher);
   context.subscriptions.push(
     vscode.commands.registerCommand('apiWorkbench.open', () => openPanel(context)),
     vscode.commands.registerCommand('apiWorkbench.revealDataFile', async () => {

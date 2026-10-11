@@ -2,7 +2,7 @@
   "name": "api-workbench",
   "displayName": "API Workbench",
   "description": "CipherDeck API Workbench inside VS Code. Requests run from the extension host, so there is no CORS.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "publisher": "SurajPrasad1993",
   "engines": {
     "vscode": "^1.80.0"
@@ -82,7 +82,31 @@
           "description": "Where collections, environments, history and settings are saved. Leave empty to use the extension's global storage folder. Supports an absolute path, ~/path, or a path relative to the first workspace folder."
         }
       }
-    }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "apiWorkbenchContainer",
+          "title": "API Workbench",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "apiWorkbenchContainer": [
+        {
+          "id": "apiWorkbench.launcher",
+          "name": "API Workbench",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "apiWorkbench.launcher",
+        "contents": "Build, send and organise API requests.\n[Open API Workbench](command:apiWorkbench.open)"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

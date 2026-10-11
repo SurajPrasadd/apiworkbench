@@ -4787,14 +4787,14 @@ try {
   /* =========================================================================
      Init
      ========================================================================= */
-  if (IS_VSCODE) {
-    document.body.classList.add('is-vscode');
-    const badge = document.createElement('span');
-    badge.className = 'vscode-badge';
-    badge.textContent = 'VS Code · no CORS';
-    const top = document.querySelector('.topbar');
-    if (top) top.appendChild(badge);
-  }
+  // if (IS_VSCODE) {
+  //   document.body.classList.add('is-vscode');
+  //   const badge = document.createElement('span');
+  //   badge.className = 'vscode-badge';
+  //   badge.textContent = 'VS Code · no CORS';
+  //   const top = document.querySelector('.topbar');
+  //   if (top) top.appendChild(badge);
+  // }
   setKvRows('params', []);
   setKvRows('headers', [{ key: 'Accept', value: 'application/json', enabled: true }]);
   setKvRows('urlencoded', []);
