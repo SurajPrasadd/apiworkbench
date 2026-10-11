@@ -116,6 +116,10 @@
   "devDependencies": {
     "@types/node": "^18.19.0",
     "@types/vscode": "^1.80.0",
+    "@types/ws": "^8.18.2",
     "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
   }
 }

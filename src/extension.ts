@@ -5,6 +5,7 @@ import * as http from 'http';
 import * as https from 'https';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import WebSocket = require('ws');
 
 interface MultipartPart {
   name: string;
@@ -173,7 +174,7 @@ function openPanel(context: vscode.ExtensionContext): void {
     { enableScripts: true, retainContextWhenHidden: true }
   );
   panel = current;
-  current.onDidDispose(() => { panel = undefined; }, null, context.subscriptions);
+  current.onDidDispose(() => { panel = undefined; wsCloseAll(); }, null, context.subscriptions);
 
   // No connect-src: the page never calls fetch(); this extension host does.
   const csp = [
@@ -223,6 +224,8 @@ function openPanel(context: vscode.ExtensionContext): void {
       } catch (e) {
         void current.webview.postMessage({ type: 'rpcResult', id: msg.id, ok: false, error: describe(e) });
       }
+    } else if (msg.type === 'wsConnect' || msg.type === 'wsSend' || msg.type === 'wsClose') {
+      wsHandle(msg as unknown as WsMessage);
     } else if (msg.type === 'clipboardRead') {
       // Used by "Paste headers" in another request / API.
       try {
@@ -233,6 +236,86 @@ function openPanel(context: vscode.ExtensionContext): void {
       }
     }
   }, null, context.subscriptions);
+}
+
+// ---- WebSocket ----
+// Sockets live here (the webview has no network access). Events go back as 'wsEvent'.
+interface WsMessage {
+  type: string;
+  connId: string;
+  url?: string;
+  headers?: Record<string, string>;
+  protocols?: string[];
+  data?: string;
+}
+
+const sockets = new Map<string, WebSocket>();
+
+function wsPost(connId: string, event: string, extra: Record<string, unknown> = {}): void {
+  void panel?.webview.postMessage({ type: 'wsEvent', connId, event, ...extra });
+}
+
+function wsCloseAll(): void {
+  for (const s of sockets.values()) {
+    try { s.terminate(); } catch { /* ignore */ }
+  }
+  sockets.clear();
+}
+
+function wsHandle(m: WsMessage): void {
+  if (m.type === 'wsConnect') {
+    sockets.get(m.connId)?.terminate();
+    const insecure = vscode.workspace.getConfiguration('apiWorkbench').get<boolean>('allowInsecureTls', false);
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(m.url ?? '', m.protocols && m.protocols.length ? m.protocols : undefined, {
+        headers: m.headers ?? {},
+        rejectUnauthorized: !insecure,
+        handshakeTimeout: 30000
+      });
+    } catch (e) {
+      wsPost(m.connId, 'error', { message: describe(e) });
+      wsPost(m.connId, 'close', { code: 1006, reason: '' });
+      return;
+    }
+    sockets.set(m.connId, ws);
+    let hs: { status: number; statusText: string; headers: Record<string, string> } | undefined;
+    ws.on('upgrade', (res) => {
+      const hdrs: Record<string, string> = {};
+      for (const [k, v] of Object.entries(res.headers)) {
+        if (v !== undefined) { hdrs[k] = Array.isArray(v) ? v.join(', ') : v; }
+      }
+      hs = { status: res.statusCode ?? 101, statusText: res.statusMessage ?? '', headers: hdrs };
+    });
+    ws.on('open', () => wsPost(m.connId, 'open', {
+      protocol: ws.protocol, status: hs?.status, statusText: hs?.statusText, headers: hs?.headers
+    }));
+    ws.on('message', (data: WebSocket.RawData, isBinary: boolean) => {
+      const buf = Array.isArray(data) ? Buffer.concat(data) : Buffer.isBuffer(data) ? data : Buffer.from(data);
+      wsPost(m.connId, 'message', {
+        binary: isBinary,
+        size: buf.length,
+        data: buf.toString(isBinary ? 'base64' : 'utf8')
+      });
+    });
+    ws.on('error', (e: Error) => wsPost(m.connId, 'error', { message: describe(e) }));
+    ws.on('close', (code: number, reason: Buffer) => {
+      if (sockets.get(m.connId) === ws) { sockets.delete(m.connId); }
+      wsPost(m.connId, 'close', { code, reason: reason.toString('utf8') });
+    });
+  } else if (m.type === 'wsSend') {
+    const ws = sockets.get(m.connId);
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      wsPost(m.connId, 'error', { message: 'Not connected' });
+      return;
+    }
+    ws.send(m.data ?? '', (err?: Error) => { if (err) { wsPost(m.connId, 'error', { message: describe(err) }); } });
+  } else if (m.type === 'wsClose') {
+    const ws = sockets.get(m.connId);
+    if (!ws) { return; }
+    if (ws.readyState === WebSocket.CONNECTING) { ws.terminate(); } else { ws.close(1000); }
+    setTimeout(() => { if (ws.readyState !== WebSocket.CLOSED) { ws.terminate(); } }, 3000);
+  }
 }
 
 function describe(e: unknown): string {
