@@ -21,7 +21,7 @@ API Workbench is also available as a standalone Windows application.
 
 * **Download size:** Approximately 10–15 MB
 * **Postman comparison:** Postman typically requires significantly more disk space.
-* **Installer:** [Download API Workbench for Windows](https://github.com/SurajPrasadd/api-workbench-tauri/blob/main/bundle/msi/API%20Workbench_0.1.1_x64_en-US.msi)
+* **Installer:** [Download API Workbench for Windows](https://github.com/SurajPrasadd/api-workbench-tauri/raw/refs/heads/main/bundle/msi/API%20Workbench_0.1.1_x64_en-US.msi)
 
 > **Note:** The Windows application is currently **unsigned**, so Microsoft Defender SmartScreen may display the following message:
 >
