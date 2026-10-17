@@ -2,7 +2,7 @@
   "name": "api-workbench",
   "displayName": "API Workbench",
   "description": "CipherDeck API Workbench inside VS Code. Requests run from the extension host, so there is no CORS.",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "publisher": "SurajPrasad1993",
   "engines": {
     "vscode": "^1.80.0"
@@ -17,46 +17,21 @@
   ],
   "icon": "icon.ico",
   "keywords": [
-    "api",
-    "api client",
-    "api testing",
-    "http",
-    "https",
-    "rest",
-    "rest api",
-    "http client",
-    "request",
-    "response",
-    "rest client",
-    "postman",
-    "collections",
-    "environment",
-    "variables",
-    "api development",
-    "developer tools",
-    "json",
-    "headers",
-    "query params",
-    "pre-request",
-    "post-response",
-    "javascript",
-    "cryptojs",
-    "aes",
-    "encryption",
-    "decryption",
-    "jwt",
-    "authentication",
-    "bearer token",
-    "access token",
-    "refresh token",
-    "cors",
-    "local",
-    "offline",
-    "request history",
+    "api", "api client", "api testing", "http", "https", "rest", "rest api",
+    "http client", "request", "response", "rest client", "postman",
+    "collections", "environment", "variables", "api development",
+    "developer tools", "json", "headers", "query params", "pre-request",
+    "post-response", "javascript", "cryptojs", "aes", "encryption",
+    "decryption", "jwt", "authentication", "bearer token", "access token",
+    "refresh token", "cors", "local", "offline", "request history",
     "saved responses"
   ],
-  "main": "./out/extension.js",
-  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onCommand:apiWorkbench.open",
+    "onCommand:apiWorkbench.revealDataFile",
+    "onView:apiWorkbench.launcher"
+  ],
   "contributes": {
     "commands": [
       {
@@ -109,14 +84,17 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "vscode:prepublish": "npm run bundle",
+    "typecheck": "tsc -p ./ --noEmit",
+    "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:bufferutil --external:utf-8-validate --format=cjs --platform=node --target=node16 --minify",
+    "bundle:dev": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --external:bufferutil --external:utf-8-validate --format=cjs --platform=node --target=node16 --sourcemap",
+    "watch": "npm run bundle:dev -- --watch"
   },
   "devDependencies": {
     "@types/node": "^18.19.0",
     "@types/vscode": "^1.80.0",
     "@types/ws": "^8.18.2",
+    "esbuild": "^0.25.0",
     "typescript": "^5.4.0"
   },
   "dependencies": {

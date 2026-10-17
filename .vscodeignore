@@ -1,5 +1,10 @@
-src/**
-tsconfig.json
-**/*.map
-node_modules/**
 .vscode/**
+.vscode-test/**
+src/**
+out/**
+node_modules/**
+tsconfig.json
+.gitignore
+setup.md
+**/*.map
+**/*.ts
