@@ -41,7 +41,7 @@ api-workbench-1.0.0.vsix
 Install the generated extension:
 
 ```bash
-code --install-extension api-workbench-1.0.3.vsix
+code --install-extension api-workbench-1.0.6.vsix
 ```
 
 After installation, restart or reload VS Code if required.
